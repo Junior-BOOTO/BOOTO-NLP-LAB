@@ -28,6 +28,10 @@ Pour une démonstration sans Streamlit (Python + pandas + scikit-learn) :
 python scripts/run_demo.py
 ```
 
+## Déploiement sur Render
+
+Le fichier `render.yaml` configure le tableau de bord Streamlit comme service web Python. Dans Render, choisir **New > Blueprint**, connecter le dépôt `Junior-BOOTO/BOOTO-NLP-LAB`, puis appliquer le Blueprint. Render installera les dépendances et lancera l'application. Le service gratuit peut se mettre en veille après une période d'inactivité.
+
 ## Format du CSV
 
 Une colonne `text` est **obligatoire** ; `document_id`, `language`, `category` sont facultatives (ces deux dernières désignent des étiquettes de référence). Encodage UTF-8, 5 Mo maximum dans l'interface. Les langues hors FR/EN/ES ne sont pas prises en charge.
@@ -72,11 +76,11 @@ docs/                      Architecture, protocole d'évaluation, cahier des cha
 
 Lire `docs/ARCHITECTURE.md`, `docs/PLAN_DE_TESTS.md` et `docs/CAHIER_DES_CHARGES_V1.md`.
 
-Pour mettre ce prototype dans un nouveau dépôt GitHub dédié : `docs/GUIDE_PUBLICATION_GITHUB.md`. Le statut des vérifications et les travaux restant à effectuer sont dans `docs/ETAT_ET_PROCHAINES_ETAPES.md`.
+Le statut des vérifications et les travaux restant à effectuer sont dans `docs/ETAT_ET_PROCHAINES_ETAPES.md`.
 
 ## Confidentialité et licences
 
-Pas de transmission automatique à une API distante par le cœur applicatif. Ne pas charger de données personnelles sans droits et protections adéquats. Vérifier les licences des jeux de données externes. **Licence du projet à déterminer avant publication publique.**
+Pas de transmission automatique à une API distante par le cœur applicatif. Ne pas charger de données personnelles sans droits et protections adéquats. Vérifier les licences des jeux de données externes. **Aucune licence open source n'est fournie pour le moment ; la réutilisation du code n'est donc pas accordée par une licence.**
 
 ## Auteur / portefeuille
 
