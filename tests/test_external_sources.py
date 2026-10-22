@@ -35,25 +35,25 @@ def test_pdf_import_extracts_each_text_page(monkeypatch):
     assert df.source.tolist() == ["essai.pdf", "essai.pdf"]
 
 
-def test_pdf_import_accepts_more_than_100_pages(monkeypatch):
+def test_pdf_import_accepts_1000_pages(monkeypatch):
     class Page:
         def extract_text(self):
             return "Texte de la page."
 
     class Reader:
         is_encrypted = False
-        pages = [Page() for _ in range(101)]
+        pages = [Page() for _ in range(external_sources.MAX_PDF_PAGES)]
 
         def __init__(self, *_args, **_kwargs):
             pass
 
     monkeypatch.setattr(external_sources, "PdfReader", Reader)
     df = external_sources.load_pdf(b"%PDF test", "livre.pdf")
-    assert len(df) == 101
-    assert df.page.iloc[-1] == 101
+    assert len(df) == 1000
+    assert df.page.iloc[-1] == 1000
 
 
-def test_pdf_import_rejects_more_than_500_pages(monkeypatch):
+def test_pdf_import_rejects_more_than_1000_pages(monkeypatch):
     class Page:
         def extract_text(self):
             return "Texte de la page."
@@ -66,7 +66,7 @@ def test_pdf_import_rejects_more_than_500_pages(monkeypatch):
             pass
 
     monkeypatch.setattr(external_sources, "PdfReader", Reader)
-    with pytest.raises(ValueError, match="500 pages"):
+    with pytest.raises(ValueError, match="1000 pages"):
         external_sources.load_pdf(b"%PDF test", "livre.pdf")
 
 
