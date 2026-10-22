@@ -38,7 +38,7 @@ Le fichier `render.yaml` configure le tableau de bord Streamlit comme service we
 
 ## Format du CSV
 
-Pour le CSV : la colonne `text` est obligatoire ; `document_id`, `language`, `category` sont facultatives. Encodage UTF-8, limite 5 Mo. Pour le PDF : extraction du texte sélectionnable, une page par document, limite 5 Mo et 100 pages ; les PDF scannés nécessitent un OCR non inclus. L’API Wikimedia récupère jusqu’à 10 extraits en français, anglais ou espagnol sans clé API.
+Pour le CSV : la colonne `text` est obligatoire ; `document_id`, `language`, `category` sont facultatives. Encodage UTF-8, limite 5 Mo. Pour le PDF : extraction du texte sélectionnable, une page par document, limite 5 Mo et 500 pages ; les PDF scannés nécessitent un OCR non inclus. L’API Wikimedia récupère jusqu’à 10 extraits en français, anglais ou espagnol sans clé API.
 
 ```csv
 document_id,text
