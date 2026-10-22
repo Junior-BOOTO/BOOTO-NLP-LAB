@@ -11,6 +11,7 @@ from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.shared import Inches, Pt, RGBColor
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -290,21 +291,34 @@ def build_docx(data, images=None):
     doc.styles["Heading 2"].paragraph_format.space_after = Pt(2)
     if data.get("school_format"):
         header = data.get("school_header") or {}
-        title = doc.add_paragraph()
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = title.add_run(header.get("title", f"ACTIVITÉ DU {data.get('theme','THÈME').upper()} - PEP"))
-        r.bold = True
-        r.font.size = Pt(15)
-        meta = doc.add_paragraph()
-        meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = meta.add_run(header.get("grade_period_year", ""))
-        run.bold = True
-        table = doc.add_table(rows=2, cols=4)
+        table = doc.add_table(rows=3, cols=4)
         table.style = "Table Grid"
+        for row in table.rows:
+            for cell, width in zip(row.cells, (Inches(1.7), Inches(1.9), Inches(1.9), Inches(1.7))):
+                cell.width = width
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        middle = table.cell(0, 1).merge(table.cell(0, 2))
+        middle.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        first = middle.paragraphs[0]
+        first.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = first.add_run(header.get("title", f"ACTIVITÉ DU {data.get('theme','THÈME').upper()} - PEP"))
+        run.bold = True
+        run.font.size = Pt(12)
+        run.font.color.rgb = RGBColor(68, 114, 196)
+        second = middle.add_paragraph(header.get("grade_period_year", ""))
+        second.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        second.runs[0].bold = True
+        second.runs[0].font.color.rgb = RGBColor(68, 114, 196)
+        # Leave the left and right header cells open for optional school/program logos.
+        table.cell(1, 0).merge(table.cell(1, 1))
         fields = header.get("student_fields", {})
-        for idx, key in enumerate(["Nom", "COURS", "Date", "Département"]):
-            table.cell(0, idx).text = key
-            table.cell(1, idx).text = str(fields.get(key, "________________"))
+        table.cell(1, 0).text = "Nom :"
+        table.cell(1, 2).text = f"COURS : {fields.get('COURS', '')}"
+        table.cell(1, 3).text = ""
+        table.cell(2, 0).text = "Date :"
+        table.cell(2, 1).text = ""
+        table.cell(2, 2).text = "Département"
+        table.cell(2, 3).text = str(fields.get("Département", lang_label))
         doc.add_paragraph()
     else:
         title = doc.add_heading(data.get("title", "Activité ludique"), 0)
