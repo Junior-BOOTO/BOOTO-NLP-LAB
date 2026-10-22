@@ -7,7 +7,7 @@ import requests
 from pypdf import PdfReader
 
 MAX_PDF_BYTES = 5 * 1024 * 1024
-MAX_PDF_PAGES = 500
+MAX_PDF_PAGES = 1000
 MAX_API_TEXT_CHARS = 3500
 SUPPORTED_LANGUAGES = {"fr", "en", "es"}
 
@@ -23,7 +23,7 @@ def load_pdf(source: bytes | io.BytesIO, filename: str = "document.pdf") -> pd.D
         if reader.is_encrypted:
             raise ValueError("Ce PDF est protégé par mot de passe et ne peut pas être lu.")
         if len(reader.pages) > MAX_PDF_PAGES:
-            raise ValueError("Le PDF dépasse la limite de 500 pages.")
+            raise ValueError("Le PDF dépasse la limite de 1000 pages.")
         records = []
         for page_number, page in enumerate(reader.pages, start=1):
             text = (page.extract_text() or "").strip()
