@@ -2,10 +2,9 @@ import base64
 import io
 import json
 import os
-import re
-import textwrap
 import zipfile
 from datetime import datetime
+from urllib.parse import urlparse
 
 import streamlit as st
 from openai import OpenAI
@@ -14,6 +13,11 @@ from PIL import Image, ImageDraw, ImageFont
 AUTHOR = "Junior BOOTO WABA"
 LANGUAGES = {"Français": "French", "English": "English", "Español": "Spanish"}
 LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+AUDIO_DOMAINS = {
+    "French": ["rfi.fr", "apprendre.tv5monde.com"],
+    "English": ["learnenglish.britishcouncil.org", "bbc.co.uk", "learningenglish.voanews.com"],
+    "Spanish": ["cervantes.es", "rtve.es"],
+}
 
 st.set_page_config(page_title="BOOTO LUDO AI", page_icon="🎲", layout="wide")
 st.markdown("""<style>
@@ -31,14 +35,21 @@ st.markdown('<div class="hero"><span class="pill">FRANÇAIS · ENGLISH · ESPAÑ
 
 with st.sidebar:
     st.markdown("### Réglages")
+    format_mode = st.selectbox("Format de la fiche", ["Format scolaire PEP", "Fiche libre"], index=0)
     lang_label = st.selectbox("Langue de l’activité", list(LANGUAGES.keys()))
     level = st.selectbox("Niveau CECRL", LEVELS, index=0)
     audience = st.text_input("Public / âge", "Élèves du primaire")
+    if format_mode == "Format scolaire PEP":
+        school_grade = st.selectbox("Grado / classe", ["Primero", "Segundo", "Tercero", "Cuarto", "Quinto", "Autre"])
+        school_period = st.selectbox("Période", ["I", "II", "III"])
+        school_year = st.text_input("Année scolaire", "2026")
+        school_course = st.text_input("Cours", "")
+        school_department = st.text_input("Département / matière", lang_label)
     theme = st.text_input("Thème", "La maison et les meubles")
     objective = st.text_area("Objectif d’apprentissage", "Décrire un lieu et situer des objets")
     duration = st.selectbox("Durée", ["30 minutes", "45 minutes", "60 minutes", "90 minutes"])
     image_model = st.selectbox("Qualité des illustrations", ["Haute (1024 px)", "Très haute (1536 px)"], index=0)
-    st.caption("La création des 20 images utilise l’API OpenAI et peut prendre plusieurs minutes. La clé API doit être configurée dans les secrets de l’application.")
+    st.caption("La fiche PEP est le format par défaut. L’audio est fourni par des liens vers des ressources avec des voix humaines, sans voix de synthèse. La création des 20 images HD utilise l’API OpenAI et peut prendre plusieurs minutes.")
 
 st.markdown("#### Une activité dans l’esprit de tes fiches")
 st.write("Démarrage visuel, défis progressifs, compréhension, interaction orale, production écrite et évaluation sur 20 points.")
@@ -62,9 +73,19 @@ def client():
 
 def generate_activity(api):
     lang = LANGUAGES[lang_label]
+    school_mode = format_mode == "Format scolaire PEP"
+    if school_mode:
+        school_header = {
+            "title": f"ACTIVITÉ DU {theme.upper()} - PEP",
+            "grade_period_year": f"GRADO {school_grade.upper()} - {school_period} PERIODO - AÑO {school_year}",
+            "student_fields": {"Nom": "________________", "COURS": school_course or "________________", "Date": "________________", "Département": school_department},
+        }
+    else:
+        school_header = None
     prompt = f"""Create one original, complete, playful language-teaching activity sheet in {lang}. All learner-facing content must be in {lang}.
 Context: CEFR {level}; audience {audience}; theme {theme}; learning objective {objective}; duration {duration}.
-Pedagogical model: visual vocabulary warm-up; playful listening task (include a short teacher-read script); reading comprehension with short age-appropriate text and challenges; oral partner/group game with clear role cards; short written production; clear instructions; differentiated support/challenge; answer key and a transparent 20-point rubric. Align vocabulary, grammar and cognitive load to CEFR {level}. Provide exactly 20 distinct illustration brief descriptions, each usable as one separate standalone picture, relevant to activity vocabulary/tasks. Avoid text inside pictures. Avoid copyrighted characters/styles. Each image description should be concise, concrete, varied, and appropriate for {audience}.
+School sheet requested: {school_mode}. When true, reproduce this exact school header structure and order: {json.dumps(school_header, ensure_ascii=False)}. Use short worksheet instructions and numbered classroom exercises under the header, followed by any useful learning-resource links. When false, use a clean free-form worksheet. Unless explicitly selected otherwise, the school format is the default.
+Pedagogical model: visual vocabulary warm-up; numbered playful tasks; listening comprehension; reading comprehension; oral partner/group game; short written production; differentiated support/challenge; answer key and transparent 20-point rubric. Align vocabulary, grammar, task complexity, and text length to CEFR {level} and {audience}. For listening, include a short transcript/script, but do not create synthetic audio or present generated speech as a real voice. The app will find playable audio lesson pages from established educational broadcasters/publishers that contain human-recorded voices; include a clear audio-resource section in the activity. Provide exactly 20 distinct illustration brief descriptions, each usable as one separate standalone picture and relevant to the tasks. Avoid text inside pictures and copyrighted characters/styles.
 Return ONLY valid JSON with keys: title, level, language, theme, objective, duration, materials (array), warmup (string), listening (object with task, script, questions array, answers array), reading (object with passage, task, questions array, answers array), speaking (object with task, steps array, role_cards array), writing (object with task, prompt, success_criteria array), differentiation (object with support, extension), rubric (array of objects with criterion and points), teacher_notes (array), image_briefs (array of exactly 20 strings). Keep everything classroom-ready."""
     response = api.chat.completions.create(
         model=os.getenv("TEXT_MODEL", "gpt-4.1-mini"),
@@ -73,7 +94,43 @@ Return ONLY valid JSON with keys: title, level, language, theme, objective, dura
     data = json.loads(response.choices[0].message.content)
     if len(data.get("image_briefs", [])) != 20:
         raise ValueError("Le générateur n’a pas fourni exactement 20 descriptions d’images. Réessaie.")
+    data["school_format"] = school_mode
+    data["school_header"] = school_header
+    data["audio_links"] = find_audio_links(api, lang, level, theme, objective)
     return data
+
+
+def find_audio_links(api, lang, cefr, lesson_theme, lesson_objective):
+    """Find source-page links for real recorded voices; accept URLs only from search citations."""
+    domains = AUDIO_DOMAINS[lang]
+    try:
+        response = api.responses.create(
+            model=os.getenv("SEARCH_MODEL", "gpt-4.1-mini"),
+            tools=[{"type": "web_search", "filters": {"allowed_domains": domains}}],
+            tool_choice="required",
+            input=(f"Find up to three current, playable educational audio lesson pages in {lang}, suitable for CEFR {cefr}, "
+                   f"related to the theme {lesson_theme} and objective {lesson_objective}. Only choose pages that feature "
+                   "human-recorded voices (teachers, speakers, interviews, stories, or native speakers), never text-to-speech. "
+                   "Use results from the allowed educational broadcaster/publisher domains. Return a brief list with the page "
+                   "title and why it matches; do not invent or rewrite any URLs."),
+        )
+    except Exception:
+        return []
+    links, seen = [], set()
+    for item in response.output:
+        payload = item.model_dump() if hasattr(item, "model_dump") else item
+        for content in payload.get("content", []):
+            for annotation in content.get("annotations", []):
+                cite = annotation.get("url_citation", annotation)
+                url = cite.get("url")
+                host = (urlparse(url).hostname or "").lower() if url else ""
+                if not url or url in seen or not any(host == d or host.endswith("." + d) for d in domains):
+                    continue
+                seen.add(url)
+                links.append({"title": cite.get("title") or "Audio authentique", "url": url})
+                if len(links) == 3:
+                    return links
+    return links
 
 
 def watermark(image_bytes, label):
@@ -119,12 +176,26 @@ def render_activity(data):
                 if isinstance(item, dict):
                     st.markdown("- " + " · ".join(f"**{k}:** {v}" for k, v in item.items()))
                 else: st.markdown(f"- {item}")
-    st.markdown(f"## {data.get('title','Activité')}  ·  {data.get('level',level)}")
-    st.caption(f"{data.get('language',lang_label)} · {data.get('theme',theme)} · {data.get('duration',duration)}")
+    if data.get("school_format"):
+        header = data.get("school_header") or {}
+        st.markdown(f"## {header.get('title', 'ACTIVITÉ - PEP')}")
+        st.markdown(f"**{header.get('grade_period_year', '')}**")
+        fields = header.get("student_fields", {})
+        st.markdown("  ·  ".join(f"**{key} :** {value}" for key, value in fields.items()))
+    else:
+        st.markdown(f"## {data.get('title','Activité')}  ·  {data.get('level',level)}")
+    st.caption(f"{data.get('language',lang_label)} · {data.get('theme',theme)} · {data.get('level',level)} · {data.get('duration',duration)}")
     st.markdown(f"**Objectif :** {data.get('objective','')}")
     section("Matériel", data.get("materials", []))
     section("1 · Observe et mémorise", data.get("warmup", ""))
     section("2 · Mission écoute", data.get("listening", {}))
+    st.markdown("**Audio avec voix réelle**")
+    if data.get("audio_links"):
+        for link in data["audio_links"]:
+            st.markdown(f"- [{link['title']}]({link['url']})")
+        st.caption("Liens de ressources audio trouvés sur des sites éducatifs/broadcast; vérifie le lecteur avant la séance. Aucun audio de synthèse n’est utilisé.")
+    else:
+        st.warning("Aucun lien audio authentique n’a été trouvé pour cette recherche. Relance la création afin d’en chercher un autre.")
     section("3 · Défi lecture", data.get("reading", {}))
     section("4 · Jeu oral", data.get("speaking", {}))
     section("5 · Production écrite", data.get("writing", {}))
@@ -135,7 +206,13 @@ def render_activity(data):
 
 
 def activity_markdown(data):
-    lines = [f"# {data.get('title', 'Activité')}", f"**Niveau :** {data.get('level', level)}  ·  **Langue :** {data.get('language', lang_label)}  ·  **Durée :** {data.get('duration', duration)}", f"**Thème :** {data.get('theme', theme)}", f"**Objectif :** {data.get('objective', '')}", ""]
+    header = data.get("school_header") or {}
+    title = header.get("title") if data.get("school_format") else data.get("title", "Activité")
+    lines = [f"# {title}"]
+    if data.get("school_format"):
+        lines.append(f"**{header.get('grade_period_year', '')}**")
+        lines.extend([f"**{k} :** {v}" for k, v in (header.get("student_fields") or {}).items()])
+    lines.extend([f"**Niveau :** {data.get('level', level)}  ·  **Langue :** {data.get('language', lang_label)}  ·  **Durée :** {data.get('duration', duration)}", f"**Thème :** {data.get('theme', theme)}", f"**Objectif :** {data.get('objective', '')}", ""])
     def add(title, value):
         lines.extend([f"## {title}", ""])
         if isinstance(value, dict):
@@ -145,12 +222,19 @@ def activity_markdown(data):
                 else: lines.append(str(item))
                 lines.append("")
         elif isinstance(value, list):
-            lines.extend([f"- {entry}" if not isinstance(entry, dict) else "- " + " · ".join(f"{k}: {v}" for k, v in entry.items()) for entry in value])
+            for entry in value:
+                if isinstance(entry, dict) and entry.get("url"):
+                    lines.append(f"- [{entry.get('title', 'Audio')} ]({entry['url']})")
+                elif isinstance(entry, dict):
+                    lines.append("- " + " · ".join(f"{k}: {v}" for k, v in entry.items()))
+                else:
+                    lines.append(f"- {entry}")
         else: lines.append(str(value))
         lines.append("")
     add("Matériel", data.get("materials", []))
     add("1 · Observe et mémorise", data.get("warmup", ""))
     add("2 · Mission écoute", data.get("listening", {}))
+    add("Audio avec voix réelle", data.get("audio_links", []))
     add("3 · Défi lecture", data.get("reading", {}))
     add("4 · Jeu oral", data.get("speaking", {}))
     add("5 · Production écrite", data.get("writing", {}))
