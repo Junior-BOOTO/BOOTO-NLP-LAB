@@ -5,7 +5,7 @@
 > **État : prototype initial, pas une V1 validée.** Ce dépôt fournit le socle technique et une démonstration expérimentale. Les seuils du cahier des charges ne sont pas encore certifiés sur un jeu de données réel indépendant.
 
 ## Objectif
-Importer des textes CSV, contrôler leur qualité, détecter leur langue (FR/EN/ES), extraire des mots-clés, classer les documents (éducation, technologie, environnement), comparer leur similarité TF-IDF et exporter les résultats.
+Importer des textes CSV ou PDF et des extraits via l’API Wikimedia, contrôler leur qualité, détecter leur langue (FR/EN/ES), extraire des mots-clés, classer les documents (éducation, technologie, environnement), comparer leur similarité TF-IDF et exporter les résultats.
 
 ## Démarrage (Windows / macOS / Linux)
 
@@ -38,7 +38,7 @@ Le fichier `render.yaml` configure le tableau de bord Streamlit comme service we
 
 ## Format du CSV
 
-Une colonne `text` est **obligatoire** ; `document_id`, `language`, `category` sont facultatives (ces deux dernières désignent des étiquettes de référence). Encodage UTF-8, 5 Mo maximum dans l'interface. Les langues hors FR/EN/ES ne sont pas prises en charge.
+Pour le CSV : la colonne `text` est obligatoire ; `document_id`, `language`, `category` sont facultatives. Encodage UTF-8, limite 5 Mo. Pour le PDF : extraction du texte sélectionnable, une page par document, limite 5 Mo et 100 pages ; les PDF scannés nécessitent un OCR non inclus. L’API Wikimedia récupère jusqu’à 10 extraits en français, anglais ou espagnol sans clé API.
 
 ```csv
 document_id,text
@@ -52,6 +52,8 @@ document_id,text
 | Fonction | État du prototype |
 |---|---|
 | CSV, validation des champs, gestion d'erreurs | Implémenté |
+| Import de PDF avec texte sélectionnable | Implémenté ; pas d'OCR pour les scans |
+| Recherche via l'API Wikimedia (FR/EN/ES) | Implémentée, sur demande de l'utilisateur |
 | Détection linguistique | `langid` si disponible, sinon heuristique de démonstration (non certifiée) |
 | Normalisation, tokenisation, mots vides | Implémenté |
 | Lemmatisation par modèles linguistiques | Non implémentée (étape suivante) |

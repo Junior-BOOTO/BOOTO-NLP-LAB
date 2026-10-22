@@ -8,7 +8,7 @@
 Utilisateur
   |
   v
-Streamlit : import CSV et filtres (app/main.py)
+Streamlit : démo, import CSV/PDF ou API Wikimedia (app/main.py)
   |
   v
 Import et validation (ingest.py) ----> statut d'erreur par ligne
@@ -58,9 +58,10 @@ Les lignes vides sont identifiées, conservées, exclues des prédictions et com
 
 ## 5. Exigences sécurité et confidentialité
 
-- Aucun envoi de documents importés vers une API externe dans le code applicatif.
-- Pas de base de données ; stockage temporaire en mémoire pendant la session.
-- Limitation UI à 5 Mo par fichier CSV.
+- Les CSV/PDF importés sont traités dans l'application et ne sont pas transmis à Wikimedia.
+- La recherche Wikimedia est déclenchée par l'utilisateur et transmet le sujet et la langue à l'API publique.
+- Pas de base de données ; les corpus restent en mémoire pendant la session.
+- Limite de 5 Mo par fichier et 100 pages par PDF ; pas d'OCR des PDF scannés.
 - Ne pas intégrer de données personnelles réelles dans le dépôt.
 - La gestion effective des données dépend également de l'environnement d'hébergement Streamlit : à vérifier avant déploiement public.
 

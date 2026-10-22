@@ -14,6 +14,7 @@ from booto_nlp.classifier import train_classifier
 from booto_nlp.pipeline import analyze_documents
 from booto_nlp.features import top_keywords
 from booto_nlp.similarity import nearest_documents
+from booto_nlp.external_sources import fetch_wikipedia, load_pdf
 
 st.set_page_config(page_title="BOOTO NLP LAB", page_icon="🧠", layout="wide")
 st.title("BOOTO NLP LAB — Multilingual Text Analyzer")
@@ -33,19 +34,61 @@ except Exception as exc:
     st.stop()
 
 st.sidebar.markdown("### Corpus")
-uploaded = st.sidebar.file_uploader("Importer un CSV (UTF-8, colonne text)", type=["csv"])
-if uploaded is None:
-    st.info("Aucun fichier chargé. Démonstration avec 300 textes synthétiques.")
+source_mode = st.sidebar.radio(
+    "Source des textes",
+    ["Démonstration", "Importer un CSV", "Importer un PDF", "API Wikipedia"],
+)
+
+if source_mode == "Démonstration":
+    st.info("Démonstration avec 300 textes synthétiques.")
     corpus = load_csv(str(ROOT / "data" / "sample" / "corpus_300_demo.csv"))
-else:
+elif source_mode == "Importer un CSV":
+    uploaded = st.sidebar.file_uploader("CSV UTF-8 avec une colonne text", type=["csv"])
+    if uploaded is None:
+        st.info("Choisissez un fichier CSV dans la barre latérale pour lancer l'analyse.")
+        st.stop()
     if uploaded.size > 5 * 1024 * 1024:
-        st.error("Fichier trop volumineux : limite 5 Mo.")
+        st.error("Fichier CSV trop volumineux : limite 5 Mo.")
         st.stop()
     try:
         corpus = load_csv(io.BytesIO(uploaded.getvalue()))
     except (ValueError, UnicodeDecodeError) as exc:
         st.error(str(exc))
         st.stop()
+elif source_mode == "Importer un PDF":
+    uploaded_pdf = st.sidebar.file_uploader(
+        "PDF avec texte sélectionnable (max. 5 Mo)", type=["pdf"]
+    )
+    if uploaded_pdf is None:
+        st.info("Choisissez un PDF dans la barre latérale. Chaque page contenant du texte sera analysée comme un document.")
+        st.stop()
+    try:
+        corpus = load_pdf(uploaded_pdf.getvalue(), uploaded_pdf.name)
+    except ValueError as exc:
+        st.error(str(exc))
+        st.stop()
+    st.caption("Le texte du PDF est extrait dans l'application et n'est pas envoyé à Wikipedia.")
+else:
+    st.subheader("Récupérer des textes depuis Wikipedia")
+    st.caption("Recherche via l'API publique Wikimedia ; aucune clé API n'est nécessaire.")
+    with st.form("wikipedia_search"):
+        query = st.text_input("Sujet à rechercher", placeholder="Ex. biodiversité, intelligence artificielle")
+        api_col1, api_col2 = st.columns(2)
+        language = api_col1.selectbox(
+            "Langue des articles", ["fr", "en", "es"],
+            format_func={"fr": "Français", "en": "Anglais", "es": "Espagnol"}.get,
+        )
+        limit = api_col2.slider("Nombre maximal d'articles", min_value=1, max_value=10, value=5)
+        fetch = st.form_submit_button("Récupérer et analyser")
+    if not fetch:
+        st.info("Saisissez un sujet puis appuyez sur « Récupérer et analyser ».")
+        st.stop()
+    try:
+        corpus = fetch_wikipedia(query, language, limit)
+    except ValueError as exc:
+        st.error(str(exc))
+        st.stop()
+    st.caption("Les articles proviennent de Wikipedia. Consultez les liens et licences dans le tableau des résultats.")
 
 results = analyze_documents(corpus, trained)
 col1, col2, col3 = st.columns(3)
