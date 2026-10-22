@@ -30,6 +30,10 @@ python scripts/run_demo.py
 
 ## Déploiement sur Render
 
+[**Préparer le déploiement gratuit sur Render**](https://render.com/deploy?repo=https://github.com/Junior-BOOTO/BOOTO-NLP-LAB) · [Guide pas à pas et reprise du projet existant](docs/DEPLOIEMENT_RENDER.md)
+
+Le bouton ouvre la configuration Render ; il ne constitue pas une URL d’application déjà déployée. Vérifier les services existants avant de créer un nouveau service.
+
 Le fichier `render.yaml` configure le tableau de bord Streamlit comme service web Python. Dans Render, choisir **New > Blueprint**, connecter le dépôt `Junior-BOOTO/BOOTO-NLP-LAB`, puis appliquer le Blueprint. Render installera les dépendances et lancera l'application. Le service gratuit peut se mettre en veille après une période d'inactivité.
 
 ## Format du CSV
