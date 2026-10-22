@@ -1,6 +1,7 @@
 """Chargement de textes depuis des PDF et l'API publique Wikimedia."""
 from __future__ import annotations
 import io
+from typing import Callable
 from urllib.parse import quote
 import pandas as pd
 import requests
@@ -11,8 +12,15 @@ MAX_PDF_PAGES = 1000
 MAX_API_TEXT_CHARS = 3500
 SUPPORTED_LANGUAGES = {"fr", "en", "es"}
 
-def load_pdf(source: bytes | io.BytesIO, filename: str = "document.pdf") -> pd.DataFrame:
-    """Extrait le texte sélectionnable d'un PDF, une page par document."""
+def load_pdf(
+    source: bytes | io.BytesIO,
+    filename: str = "document.pdf",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> pd.DataFrame:
+    """Extrait le texte sélectionnable d'un PDF, une page par document.
+
+    Le callback facultatif reçoit (page_traitée, nombre_total_de_pages).
+    """
     data = source if isinstance(source, bytes) else source.getvalue()
     if len(data) > MAX_PDF_BYTES:
         raise ValueError("Fichier PDF trop volumineux : limite 5 Mo.")
@@ -22,7 +30,8 @@ def load_pdf(source: bytes | io.BytesIO, filename: str = "document.pdf") -> pd.D
         reader = PdfReader(io.BytesIO(data), strict=False)
         if reader.is_encrypted:
             raise ValueError("Ce PDF est protégé par mot de passe et ne peut pas être lu.")
-        if len(reader.pages) > MAX_PDF_PAGES:
+        total_pages = len(reader.pages)
+        if total_pages > MAX_PDF_PAGES:
             raise ValueError("Le PDF dépasse la limite de 1000 pages.")
         records = []
         for page_number, page in enumerate(reader.pages, start=1):
@@ -30,6 +39,8 @@ def load_pdf(source: bytes | io.BytesIO, filename: str = "document.pdf") -> pd.D
             if text:
                 records.append({"document_id": f"pdf-page-{page_number}", "text": text,
                                 "source": filename, "page": page_number})
+            if progress_callback is not None:
+                progress_callback(page_number, total_pages)
     except ValueError:
         raise
     except Exception as exc:

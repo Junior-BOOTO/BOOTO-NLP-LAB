@@ -62,11 +62,26 @@ elif source_mode == "Importer un PDF":
     if uploaded_pdf is None:
         st.info(f"Choisissez un PDF dans la barre latérale. Chaque page contenant du texte sera analysée comme un document (jusqu'à {MAX_PDF_PAGES} pages).")
         st.stop()
+    progress = st.progress(0, text="Préparation de l'extraction…")
+
+    def show_pdf_progress(current_page: int, total_pages: int) -> None:
+        if total_pages and (current_page % 10 == 0 or current_page == total_pages):
+            progress.progress(
+                current_page / total_pages,
+                text=f"Extraction du PDF : page {current_page} sur {total_pages}",
+            )
+
     try:
-        corpus = load_pdf(uploaded_pdf.getvalue(), uploaded_pdf.name)
+        corpus = load_pdf(
+            uploaded_pdf.getvalue(), uploaded_pdf.name,
+            progress_callback=show_pdf_progress,
+        )
     except ValueError as exc:
+        progress.empty()
         st.error(str(exc))
         st.stop()
+    progress.empty()
+    st.success(f"{len(corpus)} pages contenant du texte ont été extraites.")
     st.caption("Le texte du PDF est extrait dans l'application et n'est pas envoyé à Wikipedia.")
 else:
     st.subheader("Récupérer des textes depuis Wikipedia")
@@ -90,7 +105,8 @@ else:
         st.stop()
     st.caption("Les articles proviennent de Wikipedia. Consultez les liens et licences dans le tableau des résultats.")
 
-results = analyze_documents(corpus, trained)
+with st.spinner(f"Analyse de {len(corpus)} textes…"):
+    results = analyze_documents(corpus, trained)
 col1, col2, col3 = st.columns(3)
 col1.metric("Documents", len(results))
 col2.metric("Textes analysables", int((results.processing_status == "ok").sum()))
