@@ -13,7 +13,7 @@ def test_pdf_import_rejects_oversized_file():
         external_sources.load_pdf(b"%PDF" + b"x" * external_sources.MAX_PDF_BYTES)
 
 
-def test_pdf_import_extracts_each_text_page(monkeypatch):
+def test_pdf_import_extracts_each_text_page_and_reports_progress(monkeypatch):
     class Page:
         def __init__(self, text):
             self.text = text
@@ -29,10 +29,15 @@ def test_pdf_import_extracts_each_text_page(monkeypatch):
             pass
 
     monkeypatch.setattr(external_sources, "PdfReader", Reader)
-    df = external_sources.load_pdf(b"%PDF test", "essai.pdf")
+    progress = []
+    df = external_sources.load_pdf(
+        b"%PDF test", "essai.pdf",
+        progress_callback=lambda current, total: progress.append((current, total)),
+    )
     assert df.text.tolist() == ["Premier texte.", "Deuxième texte."]
     assert df.page.tolist() == [1, 3]
     assert df.source.tolist() == ["essai.pdf", "essai.pdf"]
+    assert progress == [(1, 3), (2, 3), (3, 3)]
 
 
 def test_pdf_import_accepts_1000_pages(monkeypatch):
