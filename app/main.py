@@ -14,7 +14,7 @@ from booto_nlp.classifier import train_classifier
 from booto_nlp.pipeline import analyze_documents
 from booto_nlp.features import top_keywords
 from booto_nlp.similarity import nearest_documents
-from booto_nlp.external_sources import fetch_wikipedia, load_pdf
+from booto_nlp.external_sources import fetch_wikipedia, load_pdf, MAX_PDF_PAGES
 
 st.set_page_config(page_title="BOOTO NLP LAB", page_icon="🧠", layout="wide")
 st.title("BOOTO NLP LAB — Multilingual Text Analyzer")
@@ -57,10 +57,10 @@ elif source_mode == "Importer un CSV":
         st.stop()
 elif source_mode == "Importer un PDF":
     uploaded_pdf = st.sidebar.file_uploader(
-        "PDF avec texte sélectionnable (max. 5 Mo)", type=["pdf"]
+        f"PDF avec texte sélectionnable (max. 5 Mo, {MAX_PDF_PAGES} pages)", type=["pdf"]
     )
     if uploaded_pdf is None:
-        st.info("Choisissez un PDF dans la barre latérale. Chaque page contenant du texte sera analysée comme un document.")
+        st.info(f"Choisissez un PDF dans la barre latérale. Chaque page contenant du texte sera analysée comme un document (jusqu'à {MAX_PDF_PAGES} pages).")
         st.stop()
     try:
         corpus = load_pdf(uploaded_pdf.getvalue(), uploaded_pdf.name)
