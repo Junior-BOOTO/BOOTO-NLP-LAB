@@ -8,7 +8,7 @@ Application Streamlit de création d'activités ludiques pour l'apprentissage du
 - Les activités comportent observation visuelle, écoute, lecture, oral, écrit, différenciation et barème sur 20.
 - Pour l'écoute, la recherche web cible des pages pédagogiques de diffuseurs/éditeurs reconnus contenant des voix humaines enregistrées. L'application affiche les URLs citées par la recherche, sans fabriquer de lien ni générer de voix de synthèse. L'enseignant vérifie le lecteur et la pertinence avant la classe.
 - L'application crée à la demande 20 illustrations originales distinctes, haute définition, chacune signée par bandeau avec « Junior BOOTO WABA ».
-- Téléchargement du contenu de l'activité en Markdown et du JSON + 20 images dans une archive ZIP.
+- Téléchargement d’une fiche Word imprimable, du contenu Markdown et du JSON + 20 images dans une archive ZIP.
 
 ## Démarrage local
 ```bash

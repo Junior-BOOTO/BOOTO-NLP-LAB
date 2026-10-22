@@ -9,6 +9,12 @@ from urllib.parse import urlparse
 import streamlit as st
 from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt, RGBColor
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 AUTHOR = "Junior BOOTO WABA"
 LANGUAGES = {"Français": "French", "English": "English", "Español": "Spanish"}
@@ -244,6 +250,140 @@ def activity_markdown(data):
     lines.append(f"Créé pour la classe · {AUTHOR}")
     return "\n".join(lines)
 
+
+def add_hyperlink(paragraph, label, url):
+    relationship_id = paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), relationship_id)
+    run = OxmlElement("w:r")
+    props = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "6B42BC")
+    props.append(color)
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    props.append(underline)
+    run.append(props)
+    text = OxmlElement("w:t")
+    text.text = label
+    run.append(text)
+    link.append(run)
+    paragraph._p.append(link)
+
+
+def build_docx(data, images=None):
+    doc = Document()
+    sec = doc.sections[0]
+    sec.top_margin = Inches(0.55)
+    sec.bottom_margin = Inches(0.55)
+    sec.left_margin = Inches(0.65)
+    sec.right_margin = Inches(0.65)
+    normal = doc.styles["Normal"]
+    normal.font.name = "Arial"
+    normal.font.size = Pt(10)
+    normal.paragraph_format.space_after = Pt(3)
+    normal.paragraph_format.line_spacing = 1.0
+    for style_name in ("Heading 1", "Heading 2", "Heading 3"):
+        doc.styles[style_name].font.color.rgb = RGBColor(0, 0, 0)
+    doc.styles["Heading 2"].font.size = Pt(11)
+    doc.styles["Heading 2"].paragraph_format.space_before = Pt(6)
+    doc.styles["Heading 2"].paragraph_format.space_after = Pt(2)
+    if data.get("school_format"):
+        header = data.get("school_header") or {}
+        title = doc.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = title.add_run(header.get("title", f"ACTIVITÉ DU {data.get('theme','THÈME').upper()} - PEP"))
+        r.bold = True
+        r.font.size = Pt(15)
+        meta = doc.add_paragraph()
+        meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = meta.add_run(header.get("grade_period_year", ""))
+        run.bold = True
+        table = doc.add_table(rows=2, cols=4)
+        table.style = "Table Grid"
+        fields = header.get("student_fields", {})
+        for idx, key in enumerate(["Nom", "COURS", "Date", "Département"]):
+            table.cell(0, idx).text = key
+            table.cell(1, idx).text = str(fields.get(key, "________________"))
+        doc.add_paragraph()
+    else:
+        title = doc.add_heading(data.get("title", "Activité ludique"), 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Niveau : {data.get('level', '')}   |   Langue : {data.get('language', '')}   |   Durée : {data.get('duration', '')}")
+    doc.add_paragraph(f"Thème : {data.get('theme', '')}")
+    doc.add_paragraph(f"Objectif : {data.get('objective', '')}")
+
+    def heading(name):
+        paragraph = doc.add_heading(name, level=2)
+        paragraph.paragraph_format.keep_with_next = True
+
+    def body_value(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                p = doc.add_paragraph()
+                r = p.add_run(key.replace("_", " ").capitalize() + " : ")
+                r.bold = True
+                if isinstance(item, list):
+                    for entry in item: doc.add_paragraph(str(entry), style="List Bullet")
+                else:
+                    p.add_run(str(item))
+        elif isinstance(value, list):
+            for item in value: doc.add_paragraph(str(item), style="List Bullet")
+        else:
+            doc.add_paragraph(str(value))
+
+    sections = [("Matériel", data.get("materials", [])), ("1. Observe et mémorise", data.get("warmup", "")),
+                ("2. Mission écoute", data.get("listening", {}))]
+    for name, content in sections:
+        heading(name)
+        body_value(content)
+    heading("Audio avec voix réelle")
+    if data.get("audio_links"):
+        for item in data["audio_links"]:
+            paragraph = doc.add_paragraph(style="List Bullet")
+            add_hyperlink(paragraph, item.get("title", "Ouvrir la ressource audio"), item["url"])
+    else:
+        doc.add_paragraph("Aucun lien audio authentique trouvé. Relancer la recherche avant la séance.")
+    for name, content in [("3. Défi lecture", data.get("reading", {})), ("4. Jeu oral", data.get("speaking", {})),
+                          ("5. Production écrite", data.get("writing", {})), ("Différenciation", data.get("differentiation", {}))]:
+        heading(name)
+        body_value(content)
+    heading("Barème sur 20")
+    rubric = data.get("rubric", [])
+    if rubric:
+        table = doc.add_table(rows=1, cols=2)
+        table.style = "Table Grid"
+        table.rows[0].cells[0].text = "Critère"
+        table.rows[0].cells[1].text = "Points"
+        header_props = table.rows[0]._tr.get_or_add_trPr()
+        repeat_header = OxmlElement("w:tblHeader")
+        repeat_header.set(qn("w:val"), "true")
+        header_props.append(repeat_header)
+        for row in rubric:
+            cells = table.add_row().cells
+            cells[0].text = str(row.get("criterion", ""))
+            cells[1].text = str(row.get("points", ""))
+    heading("Notes pour l’enseignant")
+    body_value(data.get("teacher_notes", []))
+    if images:
+        doc.add_page_break()
+        heading("Illustrations signées")
+        for start in range(0, len(images), 2):
+            cells = doc.add_table(rows=1, cols=2).rows[0].cells
+            for offset in range(2):
+                index = start + offset
+                if index < len(images):
+                    cells[offset].paragraphs[0].add_run().add_picture(io.BytesIO(images[index]), width=Inches(2.65))
+                    caption = cells[offset].add_paragraph(f"{index+1:02d}. {data['image_briefs'][index]}\n{AUTHOR}")
+                    caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sign = doc.add_paragraph()
+    sign.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = sign.add_run(AUTHOR + " · Professeur de FLE/FLS")
+    run.bold = True
+    output = io.BytesIO()
+    doc.save(output)
+    return output.getvalue()
+
 col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("✨ Créer l’activité", type="primary", use_container_width=True):
@@ -278,6 +418,7 @@ with col2:
 if st.session_state.activity:
     data = st.session_state.activity
     st.divider()
+    st.download_button("⬇ Télécharger la fiche scolaire Word (.docx)", build_docx(data, st.session_state.images), file_name="activite_booto_ludo.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     st.download_button("⬇ Télécharger la fiche d’activité (.md)", activity_markdown(data), file_name="activite_booto_ludo.md", mime="text/markdown")
     render_activity(data)
     if st.session_state.images:
